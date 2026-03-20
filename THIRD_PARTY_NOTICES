@@ -1,0 +1,2 @@
+This project currently ships without runtime third-party dependencies.
+Development dependencies are listed in package.json and remain under their own licenses.

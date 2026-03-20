@@ -1,0 +1,28 @@
+{
+  "name": "simple-js-editor",
+  "version": "0.1.0",
+  "description": "Lightweight WYSIWYG JS/TS editor",
+  "license": "MIT",
+  "type": "module",
+  "main": "dist/editor.umd.js",
+  "module": "dist/editor.esm.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/editor.esm.js",
+      "require": "./dist/editor.umd.js"
+    },
+    "./style.css": "./dist/style.css"
+  },
+  "scripts": {
+    "dev": "vite --config apps/demo/vite.config.ts",
+    "build": "vite build && tsc -p tsconfig.build.json",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.3",
+    "vite": "^5.4.11",
+    "vitest": "^2.1.8"
+  }
+}
