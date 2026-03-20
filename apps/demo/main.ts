@@ -1,9 +1,12 @@
-import { createEditor } from '@lib/index';
+import { SimpleJsEditor } from '@lib/index';
 import '@lib/style.css';
 
-const root = document.getElementById('app')!;
-createEditor({
-  root,
-  value: '<p>Привет! Это <strong>демо</strong> редактора.</p>',
-  onChange: ({ html }) => console.log('change', html)
+new SimpleJsEditor(document.getElementById('app-full')!, {
+  initialHTML: '<p>Привет! Это <strong>full</strong> тулбар.</p>',
+  onChange: ({ html }) => console.log('full change', html)
+});
+
+new SimpleJsEditor(document.getElementById('app-min')!, {
+  toolbar: 'minimal',
+  initialHTML: '<p>Минимальная панель инструментов.</p>'
 });

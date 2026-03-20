@@ -1,5 +1,9 @@
-import { HistoryStack } from '../../core/src/history';
-import { sanitizeHtml } from '../../../src/sanitize';
+import { executeCommand } from './core/commands';
+import type { CommandResult, EditorMode, ToolbarItem } from './core/types';
+import { EventBus } from './core/event-bus';
+import { captureSelection, getBlockState, getSelectionState, isSelectionInside, restoreSelection } from './core/selection';
+import { sanitizeHtml } from './core/sanitize';
+import { EditorState } from './core/state';
 
 export type ChangePayload = { html: string; text: string; isDirty: boolean };
 
@@ -8,97 +12,149 @@ export type DomEditorOptions = {
   value: string;
   placeholder?: string;
   readOnly?: boolean;
-  onChange?: (payload: ChangePayload) => void;
+  toolbar?: 'full' | 'minimal' | { items: ToolbarItem[] };
+  onChange?: (payload: ChangePayload & { source?: string }) => void;
   onFocus?: () => void;
   onBlur?: () => void;
   onImageUpload?: (file: File) => Promise<{ src: string; alt?: string }>;
 };
 
-const BLOCKS = new Set(['P', 'DIV', 'H1', 'H2', 'H3', 'BLOCKQUOTE', 'PRE', 'LI']);
+const FULL_TOOLBAR: ToolbarItem[] = [
+  { type: 'select', id: 'mode', label: 'Mode', command: 'toggleCodeView', options: [{ label: 'Design', value: 'design' }, { label: 'Code', value: 'code' }] },
+  { type: 'select', id: 'block', label: 'Block', command: 'setBlockType', options: ['p', 'div', 'h1', 'h2', 'h3'].map((v) => ({ label: v, value: v })) },
+  { type: 'button', id: 'bold', label: 'B', command: 'toggleBold' },
+  { type: 'button', id: 'italic', label: 'I', command: 'toggleItalic' },
+  { type: 'button', id: 'underline', label: 'U', command: 'toggleUnderline' },
+  { type: 'select', id: 'font', label: 'Font', command: 'setFontFamily', options: ['Inter', 'Arial', 'Georgia', 'Times New Roman', 'Courier New'].map((v) => ({ label: v, value: v })) },
+  { type: 'select', id: 'size', label: 'Size', command: 'setFontSize', options: ['12px', '14px', '16px', '18px', '20px', '24px', '32px'].map((v) => ({ label: v, value: v })) },
+  { type: 'button', id: 'link', label: 'Link', command: 'insertLink' },
+  { type: 'button', id: 'unlink', label: 'Unlink', command: 'removeLink' },
+  { type: 'button', id: 'image', label: 'Image', command: 'insertImage' },
+  { type: 'button', id: 'left', label: 'Left', command: 'setAlign', payload: 'left' },
+  { type: 'button', id: 'center', label: 'Center', command: 'setAlign', payload: 'center' },
+  { type: 'button', id: 'right', label: 'Right', command: 'setAlign', payload: 'right' },
+  { type: 'button', id: 'justify', label: 'Justify', command: 'setAlign', payload: 'justify' },
+  { type: 'button', id: 'ol', label: 'OL', command: 'toggleList', payload: 'ol' },
+  { type: 'button', id: 'ul', label: 'UL', command: 'toggleList', payload: 'ul' },
+  { type: 'button', id: 'copy', label: 'Copy', command: 'copy' },
+  { type: 'button', id: 'cut', label: 'Cut', command: 'cut' },
+  { type: 'button', id: 'paste', label: 'Paste', command: 'paste' },
+  { type: 'button', id: 'pastePlain', label: 'Paste as text', command: 'pastePlainText' },
+  { type: 'button', id: 'indent', label: 'Indent', command: 'indent' },
+  { type: 'button', id: 'outdent', label: 'Outdent', command: 'outdent' },
+  { type: 'button', id: 'clear', label: 'Clear', command: 'clearFormatting' },
+  { type: 'button', id: 'undo', label: 'Undo', command: 'undo' },
+  { type: 'button', id: 'redo', label: 'Redo', command: 'redo' }
+];
+
+const MINIMAL_TOOLBAR: ToolbarItem[] = [
+  { type: 'button', id: 'bold', label: 'B', command: 'toggleBold' },
+  { type: 'button', id: 'italic', label: 'I', command: 'toggleItalic' },
+  { type: 'button', id: 'ul', label: 'UL', command: 'toggleList', payload: 'ul' },
+  { type: 'button', id: 'ol', label: 'OL', command: 'toggleList', payload: 'ol' },
+  { type: 'button', id: 'link', label: 'Link', command: 'insertLink' },
+  { type: 'button', id: 'clear', label: 'Clear', command: 'clearFormatting' }
+];
 
 export class DomEditor {
   private root: HTMLElement;
   private toolbar: HTMLElement;
   private editable: HTMLElement;
   private codeArea: HTMLTextAreaElement;
-  private output: HTMLElement;
-  private mode: 'design' | 'code' = 'design';
-  private initialHtml: string;
-  private history = new HistoryStack<string>();
-  private composing = false;
+  private mode: EditorMode = 'design';
   private opts: DomEditorOptions;
+  private state: EditorState;
+  private bus = new EventBus();
+  private toolbarControls = new Map<string, HTMLElement>();
+  private rafSelection: number | null = null;
+  private changeTimer: number | null = null;
 
   constructor(opts: DomEditorOptions) {
     this.opts = opts;
     this.root = opts.root;
-    this.root.classList.add('jse-root');
+    this.root.classList.add('sje-root');
     this.root.innerHTML = '';
 
     this.toolbar = document.createElement('div');
-    this.toolbar.className = 'jse-toolbar';
+    this.toolbar.className = 'sje-toolbar';
     this.editable = document.createElement('div');
-    this.editable.className = 'jse-editor';
+    this.editable.className = 'sje-editor';
     this.editable.contentEditable = String(!opts.readOnly);
     this.editable.dataset.placeholder = opts.placeholder || 'Введите текст…';
 
     this.codeArea = document.createElement('textarea');
-    this.codeArea.className = 'jse-code';
+    this.codeArea.className = 'sje-code';
     this.codeArea.hidden = true;
 
-    this.output = document.createElement('pre');
-    this.output.className = 'jse-output';
+    this.root.append(this.toolbar, this.editable, this.codeArea);
 
-    this.root.append(this.toolbar, this.editable, this.codeArea, this.output);
-    this.initialHtml = sanitizeHtml(opts.value || '<p></p>');
-    this.setHtml(this.initialHtml);
+    const clean = sanitizeHtml(opts.value || '<p></p>');
+    this.state = new EditorState(clean, !!opts.readOnly);
+    this.editable.innerHTML = clean;
+
     this.buildToolbar();
     this.bind();
   }
 
+  private getToolbarItems(): ToolbarItem[] {
+    if (!this.opts.toolbar || this.opts.toolbar === 'full') return FULL_TOOLBAR;
+    if (this.opts.toolbar === 'minimal') return MINIMAL_TOOLBAR;
+    return this.opts.toolbar.items;
+  }
+
   private bind(): void {
-    this.editable.addEventListener('compositionstart', () => (this.composing = true));
-    this.editable.addEventListener('compositionend', () => {
-      this.composing = false;
-      this.emitChange();
-    });
-
     this.editable.addEventListener('input', () => {
-      if (this.composing) return;
-      this.history.push(this.getHtml());
-      this.emitChange();
+      this.state.setHtml(this.getHtml());
+      this.state.scheduleTypingSnapshot({ html: this.state.html, selection: captureSelection(this.editable) });
+      this.emitChange('input');
     });
-
-    this.editable.addEventListener('focus', () => this.opts.onFocus?.());
-    this.editable.addEventListener('blur', () => this.opts.onBlur?.());
 
     this.editable.addEventListener('keydown', (e) => this.handleKeydown(e));
-
-    this.editable.addEventListener('paste', (e) => {
-      e.preventDefault();
-      const html = e.clipboardData?.getData('text/html');
-      const text = e.clipboardData?.getData('text/plain') ?? '';
-      const safe = sanitizeHtml(html || `<p>${text}</p>`);
-      this.insertHtmlAtSelection(safe);
-      this.emitChange();
+    this.editable.addEventListener('paste', (e) => this.handlePaste(e));
+    this.editable.addEventListener('focus', () => {
+      this.opts.onFocus?.();
+      this.bus.emit('focus', undefined);
+    });
+    this.editable.addEventListener('blur', () => {
+      this.opts.onBlur?.();
+      this.bus.emit('blur', undefined);
     });
 
     this.codeArea.addEventListener('input', () => {
-      this.output.textContent = sanitizeHtml(this.codeArea.value);
+      this.state.setHtml(sanitizeHtml(this.codeArea.value));
     });
+
+    document.addEventListener('selectionchange', this.onSelectionChange);
   }
+
+  private onSelectionChange = (): void => {
+    if (!isSelectionInside(this.editable)) return;
+    if (this.rafSelection) cancelAnimationFrame(this.rafSelection);
+    this.rafSelection = requestAnimationFrame(() => {
+      this.refreshToolbarState();
+      this.bus.emit('selectionChange', getSelectionState(this.editable));
+    });
+  };
 
   private handleKeydown(e: KeyboardEvent): void {
     const mod = e.metaKey || e.ctrlKey;
-    if (mod && e.key.toLowerCase() === 'b') return this.shortcut(e, () => this.toggleInline('strong'));
-    if (mod && e.key.toLowerCase() === 'i') return this.shortcut(e, () => this.toggleInline('em'));
-    if (mod && e.key.toLowerCase() === 'u') return this.shortcut(e, () => this.toggleInline('u'));
-    if (mod && e.key.toLowerCase() === 'k') return this.shortcut(e, () => this.openLinkPrompt());
+    if (mod && e.key.toLowerCase() === 'b') return this.shortcut(e, () => this.exec('toggleBold'));
+    if (mod && e.key.toLowerCase() === 'i') return this.shortcut(e, () => this.exec('toggleItalic'));
+    if (mod && e.key.toLowerCase() === 'u') return this.shortcut(e, () => this.exec('toggleUnderline'));
+    if (mod && e.key.toLowerCase() === 'k') return this.shortcut(e, () => this.exec('insertLink'));
     if (mod && e.key.toLowerCase() === 'z' && !e.shiftKey) return this.shortcut(e, () => this.undo());
-    if (mod && e.key.toLowerCase() === 'z' && e.shiftKey) return this.shortcut(e, () => this.redo());
-    if (e.key === 'Tab') {
-      e.preventDefault();
-      this.indent(e.shiftKey ? -24 : 24);
-    }
+    if ((mod && e.key.toLowerCase() === 'z' && e.shiftKey) || (e.ctrlKey && e.key.toLowerCase() === 'y')) return this.shortcut(e, () => this.redo());
+    if (e.key === 'Tab') return this.shortcut(e, () => this.exec(e.shiftKey ? 'outdent' : 'indent'));
+    if (mod && e.shiftKey && e.key.toLowerCase() === 'v') return this.shortcut(e, () => this.exec('pastePlainText'));
+  }
+
+  private handlePaste(e: ClipboardEvent): void {
+    e.preventDefault();
+    const html = e.clipboardData?.getData('text/html');
+    const text = e.clipboardData?.getData('text/plain') ?? '';
+    const safe = html ? sanitizeHtml(html) : text;
+    this.insertHtmlAtSelection(html ? safe : text);
+    this.pushHistoryAndChange('paste');
   }
 
   private shortcut(e: KeyboardEvent, fn: () => void): void {
@@ -106,263 +162,225 @@ export class DomEditor {
     fn();
   }
 
-  private button(label: string, onClick: () => void): HTMLButtonElement {
+  private createButton(item: ToolbarItem): HTMLButtonElement {
     const b = document.createElement('button');
     b.type = 'button';
-    b.className = 'jse-btn';
-    b.textContent = label;
-    b.addEventListener('click', onClick);
+    b.className = 'sje-btn';
+    b.textContent = item.label || item.id;
+    b.title = item.title || '';
+    b.addEventListener('click', async () => {
+      if (item.onClick) item.onClick();
+      else if (item.command === 'undo') this.undo();
+      else if (item.command === 'redo') this.redo();
+      else if (item.command) await this.exec(item.command, item.payload);
+    });
+    this.toolbarControls.set(item.id, b);
     return b;
   }
 
-  private select(options: string[], onChange: (v: string) => void): HTMLSelectElement {
+  private createSelect(item: ToolbarItem): HTMLSelectElement {
     const s = document.createElement('select');
-    s.className = 'jse-select';
-    options.forEach((o) => {
+    s.className = 'sje-select';
+    item.options?.forEach((o) => {
       const op = document.createElement('option');
-      op.value = o;
-      op.textContent = o;
+      op.value = o.value;
+      op.textContent = o.label;
       s.appendChild(op);
     });
-    s.addEventListener('change', () => onChange(s.value));
+    s.addEventListener('change', async () => {
+      if (item.id === 'mode') {
+        await this.exec('toggleCodeView', s.value);
+      } else if (item.command) {
+        await this.exec(item.command, s.value);
+      }
+    });
+    this.toolbarControls.set(item.id, s);
     return s;
   }
 
   private buildToolbar(): void {
-    const mode = this.select(['design', 'code'], (v) => this.toggleMode(v as 'design' | 'code'));
-    const block = this.select(['p', 'div', 'h1', 'h2', 'h3'], (v) => this.formatBlock(v));
-    const ff = this.select(['Inter', 'Arial', 'Georgia', 'Times New Roman', 'Courier New'], (v) => this.applySpanStyle(`font-family:${v}`));
-    const fs = this.select(['12px', '14px', '16px', '18px', '20px', '24px', '32px'], (v) => this.applySpanStyle(`font-size:${v}`));
-
-    this.toolbar.append(
-      mode,
-      block,
-      this.button('B', () => this.toggleInline('strong')),
-      this.button('I', () => this.toggleInline('em')),
-      this.button('U', () => this.toggleInline('u')),
-      ff,
-      fs,
-      this.button('Link', () => this.openLinkPrompt()),
-      this.button('Unlink', () => this.unwrapTag('a')),
-      this.button('Image', () => this.addImage()),
-      this.button('Left', () => this.align('left')),
-      this.button('Center', () => this.align('center')),
-      this.button('Right', () => this.align('right')),
-      this.button('Justify', () => this.align('justify')),
-      this.button('UL', () => this.toggleList('ul')),
-      this.button('OL', () => this.toggleList('ol')),
-      this.button('Indent', () => this.indent(24)),
-      this.button('Outdent', () => this.indent(-24)),
-      this.button('Clear', () => this.clearFormatting()),
-      this.button('Copy', () => this.clipboard('copy')),
-      this.button('Cut', () => this.clipboard('cut')),
-      this.button('Paste', () => this.clipboard('paste')),
-      this.button('Undo', () => this.undo()),
-      this.button('Redo', () => this.redo())
-    );
+    this.toolbar.innerHTML = '';
+    this.getToolbarItems().forEach((item) => {
+      if (item.type === 'separator') {
+        const sep = document.createElement('span');
+        sep.className = 'sje-separator';
+        this.toolbar.appendChild(sep);
+      }
+      if (item.type === 'button') this.toolbar.appendChild(this.createButton(item));
+      if (item.type === 'select') this.toolbar.appendChild(this.createSelect(item));
+    });
   }
 
-  private toggleMode(mode: 'design' | 'code'): void {
-    if (mode === this.mode) return;
-    this.mode = mode;
-    if (mode === 'code') {
+  private refreshToolbarState(): void {
+    const state = getSelectionState(this.editable);
+    const isRO = this.state.readOnly;
+    const setActive = (id: string, active: boolean) => this.toolbarControls.get(id)?.classList.toggle('is-active', active);
+
+    setActive('bold', state.marks.bold);
+    setActive('italic', state.marks.italic);
+    setActive('underline', state.marks.underline);
+    setActive('link', state.marks.link);
+    setActive('ul', state.block.list === 'ul');
+    setActive('ol', state.block.list === 'ol');
+    setActive('left', state.block.align === 'left');
+    setActive('center', state.block.align === 'center');
+    setActive('right', state.block.align === 'right');
+    setActive('justify', state.block.align === 'justify');
+
+    this.toolbarControls.forEach((el, id) => {
+      if (el instanceof HTMLButtonElement || el instanceof HTMLSelectElement) {
+        el.disabled = isRO && !['copy'].includes(id);
+      }
+    });
+
+    const block = this.toolbarControls.get('block');
+    if (block instanceof HTMLSelectElement) block.value = state.block.type;
+    const mode = this.toolbarControls.get('mode');
+    if (mode instanceof HTMLSelectElement) mode.value = this.mode;
+  }
+
+  private async pushHistoryAndChange(source = 'command'): Promise<void> {
+    const html = this.getHtml();
+    this.state.setHtml(html);
+    this.state.pushHistory({ html, selection: captureSelection(this.editable) });
+    this.emitChange(source);
+  }
+
+  private emitChange(source = 'command'): void {
+    if (this.changeTimer) window.clearTimeout(this.changeTimer);
+    this.changeTimer = window.setTimeout(() => {
+      const payload = { html: this.getHtml(), text: this.getText(), isDirty: this.state.isDirty(), source };
+      this.opts.onChange?.(payload);
+      this.bus.emit('change', payload);
+    }, 100);
+  }
+
+  private toggleMode(target?: string): CommandResult {
+    const next: EditorMode = target === 'code' || (target !== 'design' && this.mode === 'design') ? 'code' : 'design';
+    if (next === this.mode) return { changed: false };
+
+    if (next === 'code') {
       this.codeArea.value = this.getHtml();
       this.codeArea.hidden = false;
       this.editable.hidden = true;
     } else {
-      this.setHtml(this.codeArea.value);
+      const safe = sanitizeHtml(this.codeArea.value);
+      this.editable.innerHTML = safe;
       this.codeArea.hidden = true;
       this.editable.hidden = false;
+      this.state.setHtml(safe);
+      this.state.pushHistory({ html: safe, selection: null });
+      this.emitChange('code');
     }
+
+    this.mode = next;
+    this.state.mode = next;
+    this.bus.emit('modeChange', { mode: this.mode });
+    this.refreshToolbarState();
+    return { changed: true };
   }
 
-  private selectedRange(): Range | null {
-    const sel = document.getSelection();
-    if (!sel || sel.rangeCount === 0) return null;
-    return sel.getRangeAt(0);
-  }
+  async exec(commandId: string, payload?: unknown): Promise<CommandResult> {
+    if (this.state.readOnly && !['copy'].includes(commandId)) return { changed: false };
+    if (commandId === 'undo') return this.undo();
+    if (commandId === 'redo') return this.redo();
 
-  private wrapRange(tag: string, attrs?: Record<string, string>): void {
-    const range = this.selectedRange();
-    if (!range || range.collapsed) return;
-    const el = document.createElement(tag);
-    Object.entries(attrs || {}).forEach(([k, v]) => el.setAttribute(k, v));
-    el.append(range.extractContents());
-    range.insertNode(el);
-    this.emitChange();
-  }
+    const result = await executeCommand(
+      {
+        editable: this.editable,
+        codeArea: this.codeArea,
+        isCodeMode: () => this.mode === 'code',
+        insertHtmlAtSelection: (html) => this.insertHtmlAtSelection(html),
+        toggleMode: () => this.toggleMode(payload as string | undefined),
+        prompt: (text) => window.prompt(text),
+        onImageUpload: this.opts.onImageUpload
+      },
+      commandId,
+      payload
+    );
 
-  private toggleInline(tag: string): void { this.wrapRange(tag); }
-
-  private applySpanStyle(style: string): void { this.wrapRange('span', { style }); }
-
-  private unwrapTag(tag: string): void {
-    this.editable.querySelectorAll(tag).forEach((node) => {
-      const parent = node.parentNode;
-      if (!parent) return;
-      while (node.firstChild) parent.insertBefore(node.firstChild, node);
-      parent.removeChild(node);
-    });
-    this.emitChange();
-  }
-
-  private openLinkPrompt(): void {
-    const href = window.prompt('URL');
-    if (!href) return;
-    this.wrapRange('a', { href, target: '_blank', rel: 'noopener noreferrer' });
-  }
-
-  private async addImage(): Promise<void> {
-    const input = document.createElement('input');
-    input.type = 'file';
-    input.accept = 'image/*';
-    input.click();
-    input.addEventListener('change', async () => {
-      const file = input.files?.[0];
-      if (!file) return;
-      try {
-        let src = '';
-        let alt = '';
-        if (this.opts.onImageUpload) {
-          const res = await this.opts.onImageUpload(file);
-          src = res.src;
-          alt = res.alt || '';
-        } else {
-          src = await new Promise<string>((resolve, reject) => {
-            const reader = new FileReader();
-            reader.onload = () => resolve(String(reader.result || ''));
-            reader.onerror = () => reject(new Error('Failed to read image'));
-            reader.readAsDataURL(file);
-          });
-        }
-        this.insertHtmlAtSelection(`<img src="${src}" alt="${alt}"/>`);
-        this.emitChange();
-      } catch (err) {
-        window.alert((err as Error).message || 'Image upload failed');
-      }
-    });
-  }
-
-  private closestBlock(node: Node | null): HTMLElement | null {
-    let cur: Node | null = node;
-    while (cur && cur !== this.editable) {
-      if (cur instanceof HTMLElement && BLOCKS.has(cur.tagName)) return cur;
-      cur = cur.parentNode;
-    }
-    return null;
-  }
-
-  private formatBlock(tag: string): void {
-    const range = this.selectedRange();
-    if (!range) return;
-    const block = this.closestBlock(range.startContainer);
-    if (!block) return;
-    const repl = document.createElement(tag);
-    repl.innerHTML = block.innerHTML;
-    block.replaceWith(repl);
-    this.emitChange();
-  }
-
-  private align(value: 'left' | 'center' | 'right' | 'justify'): void {
-    const range = this.selectedRange();
-    const block = range ? this.closestBlock(range.startContainer) : null;
-    if (!block) return;
-    block.style.textAlign = value;
-    this.emitChange();
-  }
-
-  private toggleList(tag: 'ul' | 'ol'): void {
-    const range = this.selectedRange();
-    const block = range ? this.closestBlock(range.startContainer) : null;
-    if (!block) return;
-    if (block.tagName.toLowerCase() === 'li') return;
-    const list = document.createElement(tag);
-    const li = document.createElement('li');
-    li.innerHTML = block.innerHTML;
-    list.appendChild(li);
-    block.replaceWith(list);
-    this.emitChange();
-  }
-
-  private indent(delta: number): void {
-    const range = this.selectedRange();
-    const block = range ? this.closestBlock(range.startContainer) : null;
-    if (!block) return;
-    const cur = Number.parseInt(block.style.marginLeft || '0', 10) || 0;
-    block.style.marginLeft = `${Math.max(0, cur + delta)}px`;
-    this.emitChange();
-  }
-
-  private clearFormatting(): void {
-    const text = this.getText();
-    this.setHtml(`<p>${text}</p>`);
-    this.emitChange();
-  }
-
-  private async clipboard(action: 'copy' | 'cut' | 'paste'): Promise<void> {
-    try {
-      const selection = document.getSelection()?.toString() ?? '';
-      if (action === 'copy') await navigator.clipboard.writeText(selection);
-      if (action === 'cut') {
-        await navigator.clipboard.writeText(selection);
-        this.selectedRange()?.deleteContents();
-      }
-      if (action === 'paste') {
-        const text = await navigator.clipboard.readText();
-        this.insertHtmlAtSelection(`<span>${text}</span>`);
-      }
-      this.emitChange();
-    } catch {
-      document.execCommand(action);
-    }
+    if (result.changed) await this.pushHistoryAndChange(commandId);
+    this.refreshToolbarState();
+    return result;
   }
 
   private insertHtmlAtSelection(html: string): void {
-    const range = this.selectedRange();
+    const range = document.getSelection()?.rangeCount ? document.getSelection()!.getRangeAt(0) : null;
     if (!range) return;
     const frag = range.createContextualFragment(html);
     range.deleteContents();
     range.insertNode(frag);
   }
 
-  private emitChange(): void {
-    const html = this.getHtml();
-    this.output.textContent = html;
-    this.opts.onChange?.({ html, text: this.getText(), isDirty: html !== this.initialHtml });
-  }
-
   getHtml(): string {
-    return sanitizeHtml(this.editable.innerHTML || '<p></p>');
+    return sanitizeHtml(this.mode === 'code' ? this.codeArea.value : this.editable.innerHTML || '<p></p>');
   }
 
   setHtml(html: string): void {
-    this.editable.innerHTML = sanitizeHtml(html);
-    this.output.textContent = this.getHtml();
+    const safe = sanitizeHtml(html);
+    this.editable.innerHTML = safe;
+    this.codeArea.value = safe;
+    this.state.setHtml(safe);
+    this.refreshToolbarState();
   }
 
   getText(): string {
     return this.editable.textContent?.trim() || '';
   }
 
+  getActiveMarks() {
+    return getSelectionState(this.editable).marks;
+  }
+
+  getActiveBlock() {
+    return getBlockState(this.editable);
+  }
+
   setReadOnly(readOnly: boolean): void {
+    this.state.readOnly = readOnly;
     this.editable.contentEditable = String(!readOnly);
+    this.codeArea.readOnly = readOnly;
+    this.refreshToolbarState();
+    this.bus.emit('readOnlyChange', { readOnly });
   }
 
   focus(): void {
-    this.editable.focus();
+    if (this.mode === 'code') this.codeArea.focus();
+    else this.editable.focus();
   }
 
-  undo(): void {
-    const prev = this.history.undo(this.getHtml());
-    if (prev) this.setHtml(prev);
+  undo(): CommandResult {
+    this.state.flushTypingSnapshot({ html: this.getHtml(), selection: captureSelection(this.editable) });
+    const prev = this.state.undo({ html: this.getHtml(), selection: captureSelection(this.editable) });
+    if (!prev) return { changed: false };
+    this.editable.innerHTML = prev.html;
+    this.state.setHtml(prev.html);
+    restoreSelection(this.editable, prev.selection);
+    this.emitChange('undo');
+    return { changed: true };
   }
 
-  redo(): void {
-    const next = this.history.redo(this.getHtml());
-    if (next) this.setHtml(next);
+  redo(): CommandResult {
+    const next = this.state.redo({ html: this.getHtml(), selection: captureSelection(this.editable) });
+    if (!next) return { changed: false };
+    this.editable.innerHTML = next.html;
+    this.state.setHtml(next.html);
+    restoreSelection(this.editable, next.selection);
+    this.emitChange('redo');
+    return { changed: true };
+  }
+
+  on(eventName: 'change' | 'selectionChange' | 'modeChange' | 'focus' | 'blur' | 'readOnlyChange', handler: any): () => void {
+    return this.bus.on(eventName as any, handler);
+  }
+
+  off(eventName: 'change' | 'selectionChange' | 'modeChange' | 'focus' | 'blur' | 'readOnlyChange', handler: any): void {
+    this.bus.off(eventName as any, handler);
   }
 
   destroy(): void {
+    document.removeEventListener('selectionchange', this.onSelectionChange);
+    if (this.rafSelection) cancelAnimationFrame(this.rafSelection);
     this.root.innerHTML = '';
   }
 }
