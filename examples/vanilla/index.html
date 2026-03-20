@@ -1,0 +1,20 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <link rel="stylesheet" href="../../dist/style.css" />
+</head>
+<body>
+  <div id="editor"></div>
+  <input type="hidden" id="content" />
+  <script src="../../dist/editor.umd.js"></script>
+  <script>
+    const ed = window.JSEditor.createEditor({
+      root: document.getElementById('editor'),
+      value: '<p>Hello from UMD</p>',
+      onChange: ({ html }) => { document.getElementById('content').value = html; }
+    });
+    window.ed = ed;
+  </script>
+</body>
+</html>

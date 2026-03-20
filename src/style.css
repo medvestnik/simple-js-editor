@@ -1,0 +1,21 @@
+.jse-root {
+  --jse-bg: #fff;
+  --jse-fg: #111827;
+  --jse-border: #d1d5db;
+  --jse-accent: #2563eb;
+  color: var(--jse-fg);
+  font-family: Inter, Arial, sans-serif;
+}
+.jse-toolbar { display: flex; flex-wrap: wrap; gap: 6px; padding: 8px; border: 1px solid var(--jse-border); background: var(--jse-bg); }
+.jse-btn, .jse-select { border: 1px solid var(--jse-border); background: #fff; padding: 4px 8px; }
+.jse-btn:hover { border-color: var(--jse-accent); }
+.jse-editor {
+  min-height: 220px;
+  border: 1px solid var(--jse-border);
+  border-top: 0;
+  padding: 12px;
+  background: var(--jse-bg);
+}
+.jse-editor:empty::before { content: attr(data-placeholder); color: #9ca3af; }
+.jse-code { width: 100%; min-height: 220px; border: 1px solid var(--jse-border); border-top: 0; padding: 12px; font-family: monospace; }
+.jse-output { white-space: pre-wrap; border: 1px solid var(--jse-border); margin-top: 8px; padding: 8px; background: #fafafa; }
