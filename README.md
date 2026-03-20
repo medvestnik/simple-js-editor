@@ -1,109 +1,71 @@
 # simple-js-editor
 
-Лёгкий WYSIWYG JS/TS редактор (мини TinyMCE-подход) на TypeScript с `contentEditable`, своей транзакционной core-частью и санитайзером.
+Лёгкий WYSIWYG редактор с API-совместимостью для подключения как `new SimpleJsEditor(...)`.
 
-## Установка
+## Подключение ассетов в любом проекте
 
-```bash
-npm i simple-js-editor
-```
+После `npm run build` используйте файлы из `dist/`:
 
-## Запуск демо
-
-```bash
-npm i
-npm run dev
-```
-
-## Сборка библиотеки
-
-```bash
-npm run build
-```
-
-В `dist/` генерируются:
-
-- `editor.esm.js`
-- `editor.umd.js` (`window.JSEditor`)
+- `editor.umd.js`
 - `style.css`
-- `index.d.ts`
-- sourcemaps
-
-## API
-
-```ts
-export type CreateEditorOptions = {
-  root: HTMLElement;
-  value?: string;
-  placeholder?: string;
-  readOnly?: boolean;
-  onChange?: (payload: { html: string; text: string; isDirty: boolean }) => void;
-  onFocus?: () => void;
-  onBlur?: () => void;
-  onImageUpload?: (file: File) => Promise<{ src: string; alt?: string }>;
-};
-
-export type EditorInstance = {
-  getHtml(): string;
-  setHtml(html: string): void;
-  getText(): string;
-  focus(): void;
-  setReadOnly(isReadOnly: boolean): void;
-  destroy(): void;
-};
-
-export function createEditor(opts: CreateEditorOptions): EditorInstance;
-```
-
-## Пример (script/UMD)
 
 ```html
-<link rel="stylesheet" href="/vendor/jse/style.css">
+<link rel="stylesheet" href="/public/assets/simple-js-editor/style.css" />
 <div id="editor"></div>
-<input type="hidden" name="content" id="content" value="">
-<script src="/vendor/jse/editor.umd.js"></script>
+<script src="/public/assets/simple-js-editor/editor.umd.js"></script>
 <script>
-  const ed = window.JSEditor.createEditor({
-    root: document.getElementById('editor'),
-    value: document.getElementById('content').value || '<p></p>',
-    onChange: ({ html }) => { document.getElementById('content').value = html; }
+  const ed = new window.JSEditor.SimpleJsEditor(document.getElementById('editor'), {
+    initialHTML: '<p>Hello</p>',
+    readOnly: false,
+    toolbar: 'full',
+    onChange: ({ html }) => console.log(html),
+    onImageUpload: async (file) => {
+      const body = new FormData();
+      body.append('file', file);
+      const res = await fetch('/upload', { method: 'POST', body });
+      return res.json(); // { src, alt? }
+    }
   });
 </script>
 ```
 
-## Возможности
+## API
 
-- Переключение Design / Code
-- Формат блока: p/div/h1/h2/h3
-- B/I/U, font-family, font-size
-- Link/Unlink
-- Вставка image (dataURL или `onImageUpload` callback)
-- Выравнивание
-- OL/UL
-- Indent/Outdent (+ Tab/Shift+Tab)
-- Clipboard кнопки с Clipboard API и fallback на `execCommand` только для copy/cut/paste
-- Undo/Redo + хоткеи
-- Placeholder
-- IME-safe обработка composition events
-- HTML sanitize allowlist
+```ts
+const ed = new SimpleJsEditor(targetEl, {
+  initialHTML,
+  readOnly,
+  onChange,
+  onImageUpload,
+  toolbar: 'full' | 'minimal' | { items: ToolbarItem[] }
+});
 
-## Интеграции
+ed.getHTML();
+ed.setHTML('<p>...</p>');
+ed.getText();
+ed.undo();
+ed.redo();
+ed.focus();
+ed.setReadOnly(true);
+ed.exec('toggleBold');
+ed.getActiveMarks();
+ed.getActiveBlock();
+const unsub = ed.on('change', (payload) => {});
+```
 
-- `examples/vanilla/index.html`
-- `examples/vite/README.md`
-- `examples/laravel/README.md`
+## Toolbar presets
 
-## Ограничения
+- `full` (по умолчанию): block type, B/I/U, font family/size, link/unlink, image upload, align, lists, copy/cut/paste, indent/outdent, clear, undo/redo, Design/Code.
+- `minimal`: `B`, `I`, `UL`, `OL`, `Link`, `Clear`.
+- `custom`: массив `items` c `type`, `id`, `label`, `title`, `command`/`payload`/`onClick`, `when`.
 
-- Прототипный рендер и операции поверх DOM (без heavy framework)
-- Clipboard API может требовать разрешений/secure context (HTTPS)
-- Нужны доп. e2e тесты для production-жестких кейсов
+## Paste sanitation
 
-## Nice-to-have
+- `text/html` очищается allowlist-санитайзером.
+- `text/plain` вставляется как plain text.
+- Блокируются `on*`-атрибуты, `javascript:` в `href`, неожиданные стили и `url()` в стилях.
+- Режим `Paste as plain text`: кнопка `Paste as text` и hotkey `Ctrl/Cmd + Shift + V`.
 
-- StrikeThrough
-- Цвет текста/фона
-- Fullscreen
-- Drag&drop изображения
-- Конфигурируемый toolbar (`setToolbarConfig`)
-- Отдача json-модели в `onChange`
+## Демо
+
+`apps/demo` показывает два экземпляра: `full` и `minimal`.
