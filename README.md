@@ -2,19 +2,20 @@
 
 Лёгкий WYSIWYG редактор с API-совместимостью для подключения как `new SimpleJsEditor(...)`.
 
-## Подключение ассетов в любом проекте
+## Install without build (download from Releases)
 
-После `npm run build` используйте файлы из `dist/`:
-
-- `editor.umd.js`
-- `style.css`
+1. Откройте [GitHub Releases](../../releases) и скачайте `dist.zip` нужной версии.
+2. Распакуйте архив в ваш проект, например в `public/assets/simple-js-editor/`.
+3. Подключите CSS и UMD-скрипт в HTML:
 
 ```html
-<link rel="stylesheet" href="/public/assets/simple-js-editor/style.css" />
+<link rel="stylesheet" href="/assets/simple-js-editor/simple-js-editor.css" />
 <div id="editor"></div>
-<script src="/public/assets/simple-js-editor/editor.umd.js"></script>
+<script src="/assets/simple-js-editor/simple-js-editor.umd.js"></script>
 <script>
-  const ed = new window.JSEditor.SimpleJsEditor(document.getElementById('editor'), {
+  const { SimpleJsEditor } = window.SimpleJsEditor;
+
+  const editor = new SimpleJsEditor(document.getElementById('editor'), {
     initialHTML: '<p>Hello</p>',
     readOnly: false,
     toolbar: 'full',
@@ -28,6 +29,24 @@
   });
 </script>
 ```
+
+Глобальный namespace UMD-сборки зафиксирован: `window.SimpleJsEditor`.
+
+## Release a new version
+
+Создайте и отправьте git-тег:
+
+```bash
+git tag v0.1.0
+git push origin v0.1.0
+```
+
+После пуша тега workflow автоматически:
+
+- собирает стабильные артефакты в `dist/`;
+- формирует `dist/dist.zip`;
+- создаёт GitHub Release;
+- прикладывает `dist.zip` (и отдельные `simple-js-editor.umd.js`, `simple-js-editor.css`).
 
 ## API
 

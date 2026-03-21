@@ -5,9 +5,10 @@ export default defineConfig({
   build: {
     lib: {
       entry: path.resolve(__dirname, 'src/index.ts'),
-      name: 'JSEditor',
+      name: 'SimpleJsEditor',
       formats: ['es', 'umd'],
-      fileName: (format) => (format === 'es' ? 'editor.esm.js' : 'editor.umd.js')
+      fileName: (format) => (format === 'es' ? 'simple-js-editor.esm.js' : 'simple-js-editor.umd.js'),
+      cssFileName: 'simple-js-editor.css'
     },
     sourcemap: true,
     outDir: 'dist'
