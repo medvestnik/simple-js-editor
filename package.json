@@ -4,21 +4,23 @@
   "description": "Lightweight WYSIWYG JS/TS editor",
   "license": "MIT",
   "type": "module",
-  "main": "dist/editor.umd.js",
-  "module": "dist/editor.esm.js",
+  "main": "dist/simple-js-editor.umd.js",
+  "module": "dist/simple-js-editor.esm.js",
   "types": "dist/index.d.ts",
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
-      "import": "./dist/editor.esm.js",
-      "require": "./dist/editor.umd.js"
+      "import": "./dist/simple-js-editor.esm.js",
+      "require": "./dist/simple-js-editor.umd.js"
     },
-    "./style.css": "./dist/style.css"
+    "./style.css": "./dist/simple-js-editor.css"
   },
   "scripts": {
     "dev": "vite --config apps/demo/vite.config.ts",
-    "build": "vite build && tsc -p tsconfig.build.json",
-    "test": "vitest run"
+    "build": "vite build",
+    "build:dist": "npm run build && npm run dist:pack",
+    "test": "vitest run",
+    "dist:pack": "node ./scripts/postbuild-dist.mjs"
   },
   "devDependencies": {
     "typescript": "^5.6.3",
