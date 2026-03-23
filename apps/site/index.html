@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>simple-js-editor Demo / Docs</title>
+  </head>
+  <body>
+    <main class="page">
+      <header class="hero">
+        <h1>simple-js-editor</h1>
+        <p class="description">
+          Lightweight MIT-licensed WYSIWYG editor without heavy external editor dependencies.
+        </p>
+        <div class="meta-row">
+          <span id="version" class="version-pill">Version: -</span>
+          <a
+            class="release-badge"
+            href="https://github.com/medvestnik/simple-js-editor/releases/latest"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            Latest Release
+          </a>
+          <a
+            class="download-btn"
+            href="https://github.com/medvestnik/simple-js-editor/releases/latest/download/dist.zip"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            Download dist.zip
+          </a>
+        </div>
+      </header>
+
+      <section class="card">
+        <h2>Features</h2>
+        <ul class="features-grid">
+          <li>Block type (p/div/h1/h2/h3)</li>
+          <li>Bold / Italic / Underline</li>
+          <li>Font family / Font size</li>
+          <li>Link / Unlink</li>
+          <li>Image upload</li>
+          <li>Align left / center / right / justify</li>
+          <li>Ordered / Unordered lists</li>
+          <li>Copy / Cut / Paste</li>
+          <li>Indent / Outdent</li>
+          <li>Clear formatting</li>
+          <li>Undo / Redo</li>
+          <li>Design / Code mode</li>
+        </ul>
+      </section>
+
+      <section class="card">
+        <h2>Interactive example</h2>
+        <p>One editor with full toolbar + live HTML output panel updated via <code>onChange</code>.</p>
+
+        <div class="editor-actions">
+          <button id="toggle-design" type="button">Switch Design/Code</button>
+        </div>
+
+        <div id="editor-root" class="editor-root"></div>
+
+        <h3>Current HTML output</h3>
+        <pre id="html-output" class="output" aria-live="polite"></pre>
+      </section>
+
+      <section class="card">
+        <h2>Install (without build)</h2>
+        <ol>
+          <li>
+            Download <code>dist.zip</code> from
+            <a href="https://github.com/medvestnik/simple-js-editor/releases/latest" target="_blank" rel="noopener noreferrer">latest release</a>
+            (or use the button above).
+          </li>
+          <li>
+            Extract and place <code>simple-js-editor.umd.js</code> and <code>simple-js-editor.css</code> into
+            <code>public/assets/simple-js-editor/</code>.
+          </li>
+          <li>Connect via <code>window.SimpleJsEditor</code>:</li>
+        </ol>
+<pre class="output"><code>&lt;link rel="stylesheet" href="/assets/simple-js-editor/simple-js-editor.css" /&gt;
+&lt;div id="editor"&gt;&lt;/div&gt;
+&lt;script src="/assets/simple-js-editor/simple-js-editor.umd.js"&gt;&lt;/script&gt;
+&lt;script&gt;
+  const { SimpleJsEditor } = window.SimpleJsEditor;
+  const editor = new SimpleJsEditor(document.getElementById('editor'), {
+    initialHTML: '&lt;p&gt;Hello&lt;/p&gt;'
+  });
+&lt;/script&gt;</code></pre>
+      </section>
+
+      <section class="card">
+        <h2>API</h2>
+<pre class="output"><code>new SimpleJsEditor(root, options)
+getHTML()
+setHTML(html)
+getText()
+destroy()
+
+// options
+onChange(payload)
+onImageUpload(file)</code></pre>
+      </section>
+    </main>
+
+    <script type="module" src="./src/main.ts"></script>
+  </body>
+</html>

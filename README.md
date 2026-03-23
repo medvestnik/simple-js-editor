@@ -2,9 +2,20 @@
 
 Лёгкий WYSIWYG редактор с API-совместимостью для подключения как `new SimpleJsEditor(...)`.
 
-## Install without build (download from Releases)
+## Demo / Docs
 
-1. Откройте [GitHub Releases](../../releases) и скачайте `dist.zip` нужной версии.
+- GitHub Pages demo/docs: https://medvestnik.github.io/simple-js-editor/
+- Latest release page: https://github.com/medvestnik/simple-js-editor/releases/latest
+- Direct `dist.zip`: https://github.com/medvestnik/simple-js-editor/releases/latest/download/dist.zip
+
+Сайт `apps/site` автоматически деплоится через GitHub Actions workflow **Pages** при пуше в `main`.
+
+> Важно: в настройках репозитория нужно один раз включить **Pages Source = GitHub Actions**.
+
+## Install without build
+
+1. Скачайте `dist.zip` из [latest release](https://github.com/medvestnik/simple-js-editor/releases/latest) или по прямой ссылке:
+   https://github.com/medvestnik/simple-js-editor/releases/latest/download/dist.zip
 2. Распакуйте архив в ваш проект, например в `public/assets/simple-js-editor/`.
 3. Подключите CSS и UMD-скрипт в HTML:
 
@@ -87,4 +98,5 @@ const unsub = ed.on('change', (payload) => {});
 
 ## Демо
 
-`apps/demo` показывает два экземпляра: `full` и `minimal`.
+- `apps/demo` показывает два экземпляра: `full` и `minimal`.
+- `apps/site` — публичная demo/docs страница для GitHub Pages.
