@@ -20,7 +20,9 @@
     "build": "vite build",
     "build:dist": "npm run build && npm run dist:pack",
     "test": "vitest run",
-    "dist:pack": "node ./scripts/postbuild-dist.mjs"
+    "dist:pack": "node ./scripts/postbuild-dist.mjs",
+    "dev:site": "vite --config apps/site/vite.config.ts",
+    "build:site": "vite build --config apps/site/vite.config.ts"
   },
   "devDependencies": {
     "typescript": "^5.6.3",
