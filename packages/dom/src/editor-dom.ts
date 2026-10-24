@@ -19,8 +19,19 @@ export type DomEditorOptions = {
   onImageUpload?: (file: File) => Promise<{ src: string; alt?: string }>;
 };
 
+const EMOJI_LIST = [
+  '😀','😂','😍','🥰','😎','🤔','😢','😡','🥳','🤩',
+  '👍','👎','👏','🙌','🤝','🙏','💪','✌️','👋','🤞',
+  '❤️','🧡','💛','💚','💙','💜','🖤','🤍','💔','💕',
+  '🔥','⭐','✨','💫','🌟','🎉','🎊','🎁','🏆','🥇',
+  '📢','📣','📌','📍','💡','🔔','✅','❌','⚠️','ℹ️',
+  '🌍','🌏','🌎','🗺️','🏠','🏢','🚀','✈️','🚗','🚢',
+  '🍕','🍔','🍜','🍣','🍦','☕','🍺','🥂','🍷','🧃',
+  '💰','💳','📈','📉','📊','🛒','🎯','⏰','📅','📝',
+];
+
 const FULL_TOOLBAR: ToolbarItem[] = [
-  { type: 'select', id: 'mode', label: 'Mode', command: 'toggleCodeView', options: [{ label: 'Design', value: 'design' }, { label: 'Code', value: 'code' }] },
+  { type: 'select', id: 'mode', label: 'Switch Design/Code', command: 'toggleCodeView', options: [{ label: 'Design', value: 'design' }, { label: 'Code', value: 'code' }] },
   { type: 'select', id: 'block', label: 'Block', command: 'setBlockType', options: ['p', 'div', 'h1', 'h2', 'h3'].map((v) => ({ label: v, value: v })) },
   { type: 'button', id: 'bold', label: 'B', command: 'toggleBold' },
   { type: 'button', id: 'italic', label: 'I', command: 'toggleItalic' },
@@ -44,7 +55,8 @@ const FULL_TOOLBAR: ToolbarItem[] = [
   { type: 'button', id: 'outdent', label: 'Outdent', command: 'outdent' },
   { type: 'button', id: 'clear', label: 'Clear', command: 'clearFormatting' },
   { type: 'button', id: 'undo', label: 'Undo', command: 'undo' },
-  { type: 'button', id: 'redo', label: 'Redo', command: 'redo' }
+  { type: 'button', id: 'redo', label: 'Redo', command: 'redo' },
+  { type: 'button', id: 'emoji', label: '😊', title: 'Emoji' },
 ];
 
 const MINIMAL_TOOLBAR: ToolbarItem[] = [
@@ -61,6 +73,8 @@ export class DomEditor {
   private toolbar: HTMLElement;
   private editable: HTMLElement;
   private codeArea: HTMLTextAreaElement;
+  private emojiPicker: HTMLElement | null = null;
+  private emojiPickerOpen = false;
   private mode: EditorMode = 'design';
   private opts: DomEditorOptions;
   private state: EditorState;
@@ -68,6 +82,11 @@ export class DomEditor {
   private toolbarControls = new Map<string, HTMLElement>();
   private rafSelection: number | null = null;
   private changeTimer: number | null = null;
+  private closeEmojiOnOutsideClick = (e: MouseEvent): void => {
+    if (this.emojiPickerOpen && this.emojiPicker && !this.emojiPicker.contains(e.target as Node)) {
+      this.closeEmojiPicker();
+    }
+  };
 
   constructor(opts: DomEditorOptions) {
     this.opts = opts;
@@ -125,6 +144,7 @@ export class DomEditor {
     });
 
     document.addEventListener('selectionchange', this.onSelectionChange);
+    document.addEventListener('click', this.closeEmojiOnOutsideClick);
   }
 
   private onSelectionChange = (): void => {
@@ -169,6 +189,7 @@ export class DomEditor {
     b.textContent = item.label || item.id;
     b.title = item.title || '';
     b.addEventListener('click', async () => {
+      if (item.id === 'emoji') { this.toggleEmojiPicker(b); return; }
       if (item.onClick) item.onClick();
       else if (item.command === 'undo') this.undo();
       else if (item.command === 'redo') this.redo();
@@ -176,6 +197,49 @@ export class DomEditor {
     });
     this.toolbarControls.set(item.id, b);
     return b;
+  }
+
+  private buildEmojiPicker(): HTMLElement {
+    const picker = document.createElement('div');
+    picker.className = 'sje-emoji-picker';
+    picker.hidden = true;
+    EMOJI_LIST.forEach((emoji) => {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'sje-emoji-btn';
+      btn.textContent = emoji;
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        this.focus();
+        this.insertHtmlAtSelection(emoji);
+        this.pushHistoryAndChange('emoji');
+        this.closeEmojiPicker();
+      });
+      picker.appendChild(btn);
+    });
+    return picker;
+  }
+
+  private toggleEmojiPicker(triggerEl: HTMLElement): void {
+    if (this.emojiPickerOpen) {
+      this.closeEmojiPicker();
+    } else {
+      if (!this.emojiPicker) {
+        this.emojiPicker = this.buildEmojiPicker();
+        this.root.appendChild(this.emojiPicker);
+      }
+      const rect = triggerEl.getBoundingClientRect();
+      const rootRect = this.root.getBoundingClientRect();
+      this.emojiPicker.style.top = (rect.bottom - rootRect.top + 4) + 'px';
+      this.emojiPicker.style.left = Math.min(rect.left - rootRect.left, rootRect.width - 280) + 'px';
+      this.emojiPicker.hidden = false;
+      this.emojiPickerOpen = true;
+    }
+  }
+
+  private closeEmojiPicker(): void {
+    if (this.emojiPicker) this.emojiPicker.hidden = true;
+    this.emojiPickerOpen = false;
   }
 
   private createSelect(item: ToolbarItem): HTMLSelectElement {
@@ -380,6 +444,7 @@ export class DomEditor {
 
   destroy(): void {
     document.removeEventListener('selectionchange', this.onSelectionChange);
+    document.removeEventListener('click', this.closeEmojiOnOutsideClick);
     if (this.rafSelection) cancelAnimationFrame(this.rafSelection);
     this.root.innerHTML = '';
   }

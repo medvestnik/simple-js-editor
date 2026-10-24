@@ -21,3 +21,28 @@
 .sje-editor:empty::before { content: attr(data-placeholder); color: #9ca3af; }
 .sje-code, .jse-code { width: 100%; min-height: 220px; border: 1px solid var(--sje-border); border-top: 0; padding: 12px; font-family: monospace; }
 .sje-separator { width: 1px; background: var(--sje-border); margin: 0 4px; }
+
+.sje-root { position: relative; }
+.sje-emoji-picker {
+  position: absolute;
+  z-index: 100;
+  background: var(--sje-bg);
+  border: 1px solid var(--sje-border);
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(0,0,0,.12);
+  padding: 8px;
+  display: grid;
+  grid-template-columns: repeat(10, 1fr);
+  gap: 2px;
+  width: 280px;
+}
+.sje-emoji-btn {
+  border: none;
+  background: transparent;
+  font-size: 18px;
+  line-height: 1;
+  padding: 3px;
+  cursor: pointer;
+  border-radius: 4px;
+}
+.sje-emoji-btn:hover { background: #f3f4f6; }
