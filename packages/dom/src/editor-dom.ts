@@ -76,6 +76,7 @@ export class DomEditor {
   private emojiPicker: HTMLElement | null = null;
   private emojiPickerOpen = false;
   private mode: EditorMode = 'design';
+  private savedSel: ReturnType<typeof captureSelection> = null;
   private opts: DomEditorOptions;
   private state: EditorState;
   private bus = new EventBus();
@@ -139,6 +140,7 @@ export class DomEditor {
       this.bus.emit('focus', undefined);
     });
     this.editable.addEventListener('blur', () => {
+      this.savedSel = captureSelection(this.editable);
       this.opts.onBlur?.();
       this.bus.emit('blur', undefined);
     });
@@ -354,6 +356,12 @@ export class DomEditor {
     if (this.state.readOnly && !['copy'].includes(commandId)) return { changed: false };
     if (commandId === 'undo') return this.undo();
     if (commandId === 'redo') return this.redo();
+
+    // Restore selection into editor if focus moved away (e.g. toolbar button click)
+    if (this.mode === 'design' && !isSelectionInside(this.editable)) {
+      this.editable.focus({ preventScroll: true });
+      if (this.savedSel) restoreSelection(this.editable, this.savedSel);
+    }
 
     const result = await executeCommand(
       {
