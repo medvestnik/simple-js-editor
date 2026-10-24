@@ -22,26 +22,28 @@
 .sje-code, .jse-code { width: 100%; min-height: 220px; border: 1px solid var(--sje-border); border-top: 0; padding: 12px; font-family: monospace; }
 .sje-separator { width: 1px; background: var(--sje-border); margin: 0 4px; }
 
-.sje-root { position: relative; }
 .sje-emoji-picker {
   position: absolute;
-  z-index: 100;
-  background: var(--sje-bg);
-  border: 1px solid var(--sje-border);
+  z-index: 9999;
+  background: var(--sje-bg, #fff);
+  border: 1px solid var(--sje-border, #d1d5db);
   border-radius: 8px;
-  box-shadow: 0 4px 16px rgba(0,0,0,.12);
+  box-shadow: 0 4px 20px rgba(0,0,0,.15);
   padding: 8px;
   display: grid;
-  grid-template-columns: repeat(10, 1fr);
+  grid-template-columns: repeat(10, 28px);
   gap: 2px;
-  width: 280px;
+  width: auto;
 }
 .sje-emoji-btn {
+  width: 28px;
+  height: 28px;
   border: none;
   background: transparent;
   font-size: 18px;
-  line-height: 1;
-  padding: 3px;
+  line-height: 28px;
+  text-align: center;
+  padding: 0;
   cursor: pointer;
   border-radius: 4px;
 }

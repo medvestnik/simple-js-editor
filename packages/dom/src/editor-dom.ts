@@ -83,7 +83,11 @@ export class DomEditor {
   private rafSelection: number | null = null;
   private changeTimer: number | null = null;
   private closeEmojiOnOutsideClick = (e: MouseEvent): void => {
-    if (this.emojiPickerOpen && this.emojiPicker && !this.emojiPicker.contains(e.target as Node)) {
+    if (!this.emojiPickerOpen || !this.emojiPicker) return;
+    // Ignore clicks on the emoji toggle button itself (handled by toggleEmojiPicker)
+    const emojiBtn = this.toolbarControls.get('emoji');
+    if (emojiBtn && emojiBtn.contains(e.target as Node)) return;
+    if (!this.emojiPicker.contains(e.target as Node)) {
       this.closeEmojiPicker();
     }
   };
@@ -188,6 +192,8 @@ export class DomEditor {
     b.className = 'sje-btn';
     b.textContent = item.label || item.id;
     b.title = item.title || '';
+    // Prevent focus steal from contentEditable on mousedown
+    b.addEventListener('mousedown', (e) => e.preventDefault());
     b.addEventListener('click', async () => {
       if (item.id === 'emoji') { this.toggleEmojiPicker(b); return; }
       if (item.onClick) item.onClick();
@@ -226,12 +232,11 @@ export class DomEditor {
     } else {
       if (!this.emojiPicker) {
         this.emojiPicker = this.buildEmojiPicker();
-        this.root.appendChild(this.emojiPicker);
+        document.body.appendChild(this.emojiPicker);
       }
       const rect = triggerEl.getBoundingClientRect();
-      const rootRect = this.root.getBoundingClientRect();
-      this.emojiPicker.style.top = (rect.bottom - rootRect.top + 4) + 'px';
-      this.emojiPicker.style.left = Math.min(rect.left - rootRect.left, rootRect.width - 280) + 'px';
+      this.emojiPicker.style.top = (rect.bottom + window.scrollY + 4) + 'px';
+      this.emojiPicker.style.left = Math.min(rect.left + window.scrollX, window.innerWidth - 290) + 'px';
       this.emojiPicker.hidden = false;
       this.emojiPickerOpen = true;
     }
@@ -245,6 +250,7 @@ export class DomEditor {
   private createSelect(item: ToolbarItem): HTMLSelectElement {
     const s = document.createElement('select');
     s.className = 'sje-select';
+    s.addEventListener('mousedown', (e) => e.stopPropagation());
     item.options?.forEach((o) => {
       const op = document.createElement('option');
       op.value = o.value;
@@ -446,6 +452,7 @@ export class DomEditor {
     document.removeEventListener('selectionchange', this.onSelectionChange);
     document.removeEventListener('click', this.closeEmojiOnOutsideClick);
     if (this.rafSelection) cancelAnimationFrame(this.rafSelection);
+    if (this.emojiPicker?.parentNode) this.emojiPicker.parentNode.removeChild(this.emojiPicker);
     this.root.innerHTML = '';
   }
 }
