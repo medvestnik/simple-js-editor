@@ -7,6 +7,7 @@ on:
 
 permissions:
   contents: write
+  actions: write
 
 jobs:
   bump-and-release:
@@ -26,6 +27,12 @@ jobs:
           node-version: 'lts/*'
           cache: 'npm'
 
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run tests
+        run: npm test
+
       - name: Bump patch version
         id: bump
         run: |
@@ -34,10 +41,35 @@ jobs:
           npm version patch --no-git-tag-version
           NEW_VER=$(node -p "require('./package.json').version")
           echo "version=$NEW_VER" >> "$GITHUB_OUTPUT"
+          echo "tag=v$NEW_VER" >> "$GITHUB_OUTPUT"
 
       - name: Commit and tag
         run: |
-          git add package.json
+          git add package.json package-lock.json
           git commit -m "chore: bump version to ${{ steps.bump.outputs.version }} [skip ci]"
-          git tag "v${{ steps.bump.outputs.version }}"
-          git push origin main --follow-tags
+          git tag -a "${{ steps.bump.outputs.tag }}" -m "${{ steps.bump.outputs.tag }}"
+          git push origin HEAD:main
+          git push origin "${{ steps.bump.outputs.tag }}"
+
+      # Pushes made with GITHUB_TOKEN don't trigger other workflows,
+      # so the release is built and published right here.
+      - name: Build distributable assets
+        run: npm run build:dist
+
+      - name: Create GitHub Release and upload assets
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.bump.outputs.tag }}
+          name: ${{ steps.bump.outputs.tag }}
+          generate_release_notes: true
+          files: |
+            dist/dist.zip
+            dist/simple-js-editor.umd.js
+            dist/simple-js-editor.css
+
+      # Redeploy the demo from the bumped commit so it shows the released version
+      # (workflow_dispatch is the one event GITHUB_TOKEN is allowed to trigger).
+      - name: Redeploy GitHub Pages
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh workflow run pages.yml --ref main
