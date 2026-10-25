@@ -83,9 +83,9 @@ export class DomEditor {
   private toolbarControls = new Map<string, HTMLElement>();
   private rafSelection: number | null = null;
   private changeTimer: number | null = null;
-  private closeEmojiOnOutsideClick = (e: MouseEvent): void => {
+  private closeEmojiOnOutsideMousedown = (e: MouseEvent): void => {
     if (!this.emojiPickerOpen || !this.emojiPicker) return;
-    // Ignore clicks on the emoji toggle button itself (handled by toggleEmojiPicker)
+    // Ignore mousedown on the toggle button — the click handler will close via toggleEmojiPicker
     const emojiBtn = this.toolbarControls.get('emoji');
     if (emojiBtn && emojiBtn.contains(e.target as Node)) return;
     if (!this.emojiPicker.contains(e.target as Node)) {
@@ -150,7 +150,7 @@ export class DomEditor {
     });
 
     document.addEventListener('selectionchange', this.onSelectionChange);
-    document.addEventListener('click', this.closeEmojiOnOutsideClick);
+    document.addEventListener('mousedown', this.closeEmojiOnOutsideMousedown, true);
   }
 
   private onSelectionChange = (): void => {
@@ -458,7 +458,7 @@ export class DomEditor {
 
   destroy(): void {
     document.removeEventListener('selectionchange', this.onSelectionChange);
-    document.removeEventListener('click', this.closeEmojiOnOutsideClick);
+    document.removeEventListener('mousedown', this.closeEmojiOnOutsideMousedown, true);
     if (this.rafSelection) cancelAnimationFrame(this.rafSelection);
     if (this.emojiPicker?.parentNode) this.emojiPicker.parentNode.removeChild(this.emojiPicker);
     this.root.innerHTML = '';
