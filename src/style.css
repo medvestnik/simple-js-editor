@@ -35,6 +35,8 @@
   gap: 2px;
   width: auto;
 }
+/* display:grid above overrides the UA [hidden] rule, so restore it explicitly */
+.sje-emoji-picker[hidden] { display: none; }
 .sje-emoji-btn {
   width: 28px;
   height: 28px;
